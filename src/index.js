@@ -1,145 +1,151 @@
-const express = require('express');
-const cors = require('cors');
 
-const { v4: uuidv4 } = require('uuid');
 
-const app = express();
+const express = require("express")
+const { v4: uuid } = require("uuid")
+const cors = require("cors")
 
-app.use(cors());
-app.use(express.json());
+const app = express()
 
-const users = [];
+app.use(cors())
+app.use(express.json())
 
-/*
-- users:
-  { 
-    id: 'uuid', // precisa ser um uuid
-    name: 'Danilo Vieira', 
-    username: 'danilo', 
-    todos: []
-  }
-*/
+const users = []
 
 function checksExistsUserAccount(request, response, next) {
-  const { username } = request.headers;
+  const { username } = request.headers
 
-  console.log(request, username)
-  const userExist = users.find(u => u.username === username);
-
-  
   if (users.length == 0) {
     return response.status(404).json({ Error: "Não há usuários cadastrados" })
   }
 
-  if (!userExist) {
+  const user = users.find((u) => u.username == username)
+
+  if (!user) {
     return response.status(404).send("Usuário não encontrado")
   }
 
-  request.user = userExist
+  request.user = user
 
   return next()
 }
 
-app.post('/users', (request, response) => {
-  const { name, username } = request.body;
+// Criar usuario
+app.post("/users", (request, response) => {
+  // Recebendo dados da requisição
+  const { name, username } = request.body
 
-  const userExist = users.find((user) => user.username === username)
-
-  if (userExist) {
+  // verificando se o usuario existe pelo username
+  const userExists = users.find((u) => u.username === username)
+  if (userExists) {
     return response.status(400).json({ Error: "Usuário já existe no sistema" })
   }
 
-  const user = { 
-    id: uuidv4(),
+  // formatando usuario
+  const user = {
+    id: uuid(),
     name,
     username,
     todos: []
-  };
+  }
 
-  users.push(user);
-  return response.json(users);
-});
+  // adicionando usuario
+  users.push(user)
 
-app.get('/todos', checksExistsUserAccount, (request, response) => {
+  // retornando usuario criado
+  return response.status(201).json(user)
+})
+
+app.get("/todos", checksExistsUserAccount, (request, response) => {
+  // recebendo usuario da requisição
   const { user } = request
-  return response.status(201).json(user.todos)
-});
 
-app.post('/todos', checksExistsUserAccount, (request, response) => {
-  const { user } = request;
+  // retornando todos do usuario
+  return response.json(user.todos)
+})
 
+app.post("/todos", checksExistsUserAccount, (request, response) => {
+  // Recebendo dados da requisição
   const { title, deadline } = request.body
+  const { user } = request
 
-  const todo = { 
-    id: uuidv4(),
+  // Formatando todo
+  const todo = {
+    id: uuid(),
     title,
-    done: false, 
-    deadline: new Date(deadline), 
+    done: false,
+    deadline: new Date(deadline),
     created_at: new Date()
   }
 
+  // Adicionando todo
   user.todos.push(todo)
 
-  return response.send(todo)
-});
+  // Retornado todo
+  return response.status(201).json(todo)
+})
 
-/*
-  A rota deve receber, pelo header da requisição, uma propriedade username 
-  contendo o username do usuário e receber as propriedades title e deadline 
-  dentro do corpo. É preciso alterar apenas o title e o deadline da tarefa que
-   possua o id igual ao id presente nos parâmetros da rota.
-*/
+app.put("/todos/:id", checksExistsUserAccount, (request, response) => {
+  //Recebendo parametros da requisição
+  const { id } = request.params
+  const { title, deadline } = request.body
+  const { user } = request
 
-app.put('/todos/:id', checksExistsUserAccount, (request, response) => {
-  const { title, deadline } = request.body;
-  const { username } = request.headers;
-  const { id } = request.params;
+  // Buscando todo
+  const todo = user.todos.find((t) => t.id === id)
 
-  const user = users.find(user => user.username === username)
+  if (!todo) {
+    return response.status(404).json({ Error: "Todo não existe" })
+  }
 
-  const todoselct =  user.todos.find(todo => todo.id === id)
+  // alterando valores da todo
+  todo.title = title
+  todo.deadline = new Date(deadline)
 
-  todoselct.title = title;
-  todoselct.deadline = deadline;
+  // retornando todo alterada
+  return response.status(201).json(todo)
+})
 
-  console.log(todoselct)
+app.patch("/todos/:id/done", checksExistsUserAccount, (request, response) => {
+  // Recebendo dados da requisição
+  const { id } = request.params
+  const { user } = request
 
-  return response.send(todoselct)
-});
+  // buscando todo
+  const todo = user.todos.find((t) => t.id === id)
 
-/*
-  A rota deve receber, pelo header da requisição, uma propriedade username contendo
-   o username do usuário e alterar a propriedade done para true no todo que possuir 
-   um id igual ao id presente nos parâmetros da rota.
-*/
+  if (!todo) {
+    return response.status(404).json({ Error: "Todo não existe" })
+  }
 
-app.patch('/todos/:id/done', checksExistsUserAccount, (request, response) => {
-  const { username } = request.headers;
-  const { id } = request.params;
+  if (todo.done == true) {
+    return response.status(404).json({ Error: "Todo já concluida" })
+  }
 
-  const user = users.find(user => user.username === username);
-  const idSelect = user.todos.find(to => to.id === id);
+  // altrando valor
+  todo.done = true
 
-  idSelect.done = true;
+  // Retornando todo alterada
+  return response.status(201).json(todo)
+})
 
-  return response.send(user)
-});
+app.delete("/todos/:id", checksExistsUserAccount, (request, response) => {
+  // recebendo id da requisição
+  const { id } = request.params
+  const { user } = request
 
-/*
-  A rota deve receber, pelo header da requisição, uma propriedade username contendo 
-  o username do usuário e excluir o todo que possuir um id igual ao id presente nos 
-  parâmetros da rota.
-*/
+  // busca o indicie do array
+  const index = user.todos.findIndex((t) => t.id === id)
 
-app.delete('/todos/:id', checksExistsUserAccount, (request, response) => {
-  const { username } = request.headers;
-  const { id } = request.params;
+  if (index == -1) {
+    return response.status(404).json({ Erro: "Todo não existe" })
+  }
 
-  const user = request.user;
+  // deleta a todo da posição
+  user.todos.splice(index, 1)
 
-  user.todos.splice(user.todos.indexOf(id), 1);
+  // retorna uma mensagem de sucesso
+  return response.status(204)
+})
 
-  return response.send(users)
-});
+module.exports = app
 
-module.exports = app;
