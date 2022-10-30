@@ -1,75 +1,151 @@
 
 
-const express = require("express");
-const cors = require("cors");
-const { uuid } = require("uuidv4");
+const express = require("express")
+const { v4: uuid } = require("uuid")
+const cors = require("cors")
 
-const app = express();
+const app = express()
 
-app.use(express.json());
-app.use(cors());
+app.use(cors())
+app.use(express.json())
 
-const repositories = [];
+const users = []
 
-app.get("/repositories", (req, res) => {
-  return res.json(repositories);
-});
+function checksExistsUserAccount(request, response, next) {
+  const { username } = request.headers
 
-app.post("/repositories", (req, res) => {
-  const { title, url, techs } = req.body;
-  const repository = { id: uuid(), title, url, techs, likes: 0 };
-
-  repositories.push(repository);
-
-  return res.json(repository);
-});
-
-app.put("/repositories/:id", (req, res) => {
-  const { id } = req.params;
-  const { title, url, techs } = req.body;
-  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
-
-  if(repositoryIndex < 0) {
-    return res.status(400).json({ error: 'Repository not found.'});
+  if (users.length == 0) {
+    return response.status(404).json({ Error: "Não há usuários cadastrados" })
   }
 
-  const repository = {
-    id,
+  const user = users.find((u) => u.username == username)
+
+  if (!user) {
+    return response.status(404).send("Usuário não encontrado")
+  }
+
+  request.user = user
+
+  return next()
+}
+
+// Criar usuario
+app.post("/users", (request, response) => {
+  // Recebendo dados da requisição
+  const { name, username } = request.body
+
+  // verificando se o usuario existe pelo username
+  const userExists = users.find((u) => u.username === username)
+  if (userExists) {
+    return response.status(400).json({ Error: "Usuário já existe no sistema" })
+  }
+
+  // formatando usuario
+  const user = {
+    id: uuid(),
+    name,
+    username,
+    todos: []
+  }
+
+  // adicionando usuario
+  users.push(user)
+
+  // retornando usuario criado
+  return response.status(201).json(user)
+})
+
+app.get("/todos", checksExistsUserAccount, (request, response) => {
+  // recebendo usuario da requisição
+  const { user } = request
+
+  // retornando todos do usuario
+  return response.json(user.todos)
+})
+
+app.post("/todos", checksExistsUserAccount, (request, response) => {
+  // Recebendo dados da requisição
+  const { title, deadline } = request.body
+  const { user } = request
+
+  // Formatando todo
+  const todo = {
+    id: uuid(),
     title,
-    url,
-    techs,
-    likes: repositories[repositoryIndex].likes
-  };
-
-  repositories[repositoryIndex] = repository;
-
-  return res.json(repository);
-});
-
-app.delete("/repositories/:id", (req, res) => {
-  const { id } = req.params;
-  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
-
-  if(repositoryIndex < 0) {
-    return res.status(400).json({ error: 'Repository not found.'});
+    done: false,
+    deadline: new Date(deadline),
+    created_at: new Date()
   }
 
-  repositories.splice(repositoryIndex, 1);
-  
-  return res.status(204).send();
-});
+  // Adicionando todo
+  user.todos.push(todo)
 
-app.post("/repositories/:id/like", (req, res) => {
-  const { id } = req.params;
-  const repositoryIndex = repositories.findIndex(repository => repository.id === id);
+  // Retornado todo
+  return response.status(201).json(todo)
+})
 
-  if(repositoryIndex < 0) {
-    return res.status(400).json({ error: 'Repository not found.'});
+app.put("/todos/:id", checksExistsUserAccount, (request, response) => {
+  //Recebendo parametros da requisição
+  const { id } = request.params
+  const { title, deadline } = request.body
+  const { user } = request
+
+  // Buscando todo
+  const todo = user.todos.find((t) => t.id === id)
+
+  if (!todo) {
+    return response.status(404).json({ Error: "Todo não existe" })
   }
 
-  repositories[repositoryIndex].likes += 1;
+  // alterando valores da todo
+  todo.title = title
+  todo.deadline = new Date(deadline)
 
-  return res.json(repositories[repositoryIndex]);
-});
+  // retornando todo alterada
+  return response.status(201).json(todo)
+})
 
-module.exports = app;
+app.patch("/todos/:id/done", checksExistsUserAccount, (request, response) => {
+  // Recebendo dados da requisição
+  const { id } = request.params
+  const { user } = request
+
+  // buscando todo
+  const todo = user.todos.find((t) => t.id === id)
+
+  if (!todo) {
+    return response.status(404).json({ Error: "Todo não existe" })
+  }
+
+  if (todo.done == true) {
+    return response.status(404).json({ Error: "Todo já concluida" })
+  }
+
+  // altrando valor
+  todo.done = true
+
+  // Retornando todo alterada
+  return response.status(201).json(todo)
+})
+
+app.delete("/todos/:id", checksExistsUserAccount, (request, response) => {
+  // recebendo id da requisição
+  const { id } = request.params
+  const { user } = request
+
+  // busca o indicie do array
+  const index = user.todos.findIndex((t) => t.id === id)
+
+  if (index == -1) {
+    return response.status(404).json({ Erro: "Todo não existe" })
+  }
+
+  // deleta a todo da posição
+  user.todos.splice(index, 1)
+
+  // retorna uma mensagem de sucesso
+  return response.status(204)
+})
+
+module.exports = app
+
